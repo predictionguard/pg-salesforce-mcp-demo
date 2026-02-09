@@ -1,0 +1,12 @@
+.venv/
+.env
+logs/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.DS_Store
+.claude/
+tests/
+scripts/
+Salesforce_GovCon_Demo_Pack/
