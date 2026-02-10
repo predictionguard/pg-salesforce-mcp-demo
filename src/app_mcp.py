@@ -5,7 +5,8 @@ from typing import Dict, Any, Annotated, Optional
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
+import json
 
 sys.path.append(str(Path(__file__).parent))
 
@@ -16,21 +17,23 @@ from utils.data_cleaner import clean_for_json
 load_dotenv()
 logger = setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 
+
 # Initialize MCP server (no auth for demo)
 mcp = FastMCP("Salesforce MCP Server")
 
+
 # Global Salesforce connection (Client Credentials flow)
+# Connection is lazy - will connect on first use
 sf_conn = SalesforceConnection(
     consumer_key=os.getenv("SF_CONSUMER_KEY"),
     consumer_secret=os.getenv("SF_CONSUMER_SECRET"),
     domain=os.getenv("SF_DOMAIN"),
 )
 
-try:
-    sf_conn.connect()
-    logger.info("Salesforce connected")
-except Exception as e:
-    logger.warning(f"Initial connection failed: {e}")
+# Don't connect during startup - let Cloud Run start the server first
+# Connection will happen on first tool call
+logger.info(f"Salesforce connection configured (domain: {os.getenv('SF_DOMAIN')})")
+logger.info("Connection will be established on first tool call")
 
 # Import tools
 from tools.soql_query import execute_sf_query
@@ -85,11 +88,45 @@ async def tool_generate_sales_pipeline(
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> PlainTextResponse:
+    """Health check endpoint - returns OK if server is running."""
+    logger.info("Health check called")
     return PlainTextResponse("OK")
+
+
+@mcp.custom_route("/ready", methods=["GET"])
+async def readiness_check(request: Request) -> PlainTextResponse:
+    """Readiness check - tests if Salesforce connection can be established."""
+    logger.info("Readiness check called")
+    try:
+        sf_conn.reconnect_if_needed()
+        return PlainTextResponse("READY")
+    except Exception as e:
+        logger.error(f"Readiness check failed: {e}")
+        from starlette.responses import Response
+        return Response(content=f"NOT READY: {str(e)}", status_code=503)
 
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
-    logger.info(f"Starting MCP Server on {host}:{port}")
-    mcp.run(transport="http", host=host, port=port)
+
+    logger.info("=" * 60)
+    logger.info("SALESFORCE MCP SERVER STARTUP")
+    logger.info("=" * 60)
+    logger.info(f"Host: {host}")
+    logger.info(f"Port: {port}")
+    logger.info(f"SF Domain: {os.getenv('SF_DOMAIN', 'NOT SET')}")
+    logger.info(f"SF Consumer Key: {'SET' if os.getenv('SF_CONSUMER_KEY') else 'NOT SET'}")
+    logger.info(f"SF Consumer Secret: {'SET' if os.getenv('SF_CONSUMER_SECRET') else 'NOT SET'}")
+    logger.info(f"Log Level: {os.getenv('LOG_LEVEL', 'INFO')}")
+    logger.info("=" * 60)
+    logger.info(f"MCP endpoint: http://{host}:{port}/mcp")
+    logger.info(f"Health endpoint: http://{host}:{port}/health")
+    logger.info("=" * 60)
+    logger.info("Starting server (Salesforce connection will be lazy)...")
+
+    try:
+        mcp.run(transport="http", host=host, port=port)
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")
+        raise
