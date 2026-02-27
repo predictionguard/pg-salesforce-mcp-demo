@@ -66,25 +66,29 @@ FastMCP lets you attach arbitrary Starlette routes to the same server — useful
 
 ```python
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse
+from starlette.responses import PlainTextResponse, Response
 
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> PlainTextResponse:
+    """Health check — returns OK if server is running."""
     return PlainTextResponse("OK")
+
+@mcp.custom_route("/ready", methods=["GET"])
+async def readiness_check(request: Request) -> PlainTextResponse:
+    """Readiness check — tests if Salesforce connection can be established."""
+    try:
+        sf_conn.reconnect_if_needed()
+        return PlainTextResponse("READY")
+    except Exception as e:
+        return Response(content=f"NOT READY: {str(e)}", status_code=503)
 ```
 
-### 4. Export an ASGI app
+### 4. Run the server
 
-`mcp.http_app()` returns a standard ASGI application. Stateless HTTP transport avoids the session bootstrapping delay (~15 seconds) of the default Streamable HTTP transport.
+`mcp.run()` starts the server using FastMCP's built-in HTTP transport. The Salesforce connection is lazy — it is established on the first tool call rather than at startup, which allows the server to pass health checks before the external service is confirmed reachable.
 
 ```python
-app = mcp.http_app(path="/mcp")
-```
-
-Run it with any ASGI server:
-
-```bash
-uvicorn src.app_mcp:app --host 0.0.0.0 --port 8000
+mcp.run(transport="http", host=host, port=port)
 ```
 
 The MCP endpoint is available at `http://localhost:8000/mcp`.
@@ -101,7 +105,7 @@ The MCP endpoint is available at `http://localhost:8000/mcp`.
 
 ```bash
 uv sync
-uv run uvicorn src.app_mcp:app --host 0.0.0.0 --port 8000
+uv run python src/app_mcp.py
 ```
 
 ### Test with the FastMCP client
