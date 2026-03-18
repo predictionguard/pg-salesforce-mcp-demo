@@ -4,6 +4,9 @@
 
 A demonstration of how to build a production-ready MCP (Model Context Protocol) server for Salesforce integration using [FastMCP](https://github.com/jlowin/fastmcp).
 
+<img width="1031" height="547" alt="image" src="https://github.com/user-attachments/assets/97cd67a1-4b35-4242-9621-2e26750e4c22" />
+
+
 ## What this demonstrates
 
 - Defining MCP tools with `@mcp.tool()` and typed, annotated parameters
