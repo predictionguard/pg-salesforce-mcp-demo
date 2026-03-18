@@ -1,4 +1,6 @@
-# Salesforce MCP Server
+# Example of Setting up MCP server with FastMCP
+
+## Salesforce Demo MCP
 
 A demonstration of how to build a production-ready MCP (Model Context Protocol) server for Salesforce integration using [FastMCP](https://github.com/jlowin/fastmcp).
 
